@@ -9,6 +9,7 @@ using namespace kong;
 
 KongApp::KongApp()
 {
+    loadModels();
     createPipelineLayout();
     createPipeline();
     createCommandBuffers();
@@ -29,6 +30,17 @@ void KongApp::run()
 
     // cpu等待所有gpu任务完成
     vkDeviceWaitIdle(m_device.device());
+}
+
+void KongApp::loadModels()
+{
+    std::vector<KongModel::Vertex> vertices {
+        {{0.0, -0.5}, {1, 0, 0}},
+        {{0.5, 0.5}, {0, 1, 0}},
+        {{-0.5, 0.5}, {0, 0, 1}},
+    };
+
+    m_model = std::make_unique<KongModel>(m_device, vertices);
 }
 
 void KongApp::createPipelineLayout()
@@ -111,7 +123,10 @@ void KongApp::createCommandBuffers()
         // VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS代表有引用的情况，两种不能混合使用
         vkCmdBeginRenderPass(m_commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         m_pipeline->bind(m_commandBuffers[i]);
-        vkCmdDraw(m_commandBuffers[i], 3, 1, 0, 0);
+
+        m_model->bind(m_commandBuffers[i]);
+        m_model->draw(m_commandBuffers[i]);
+        
         vkCmdEndRenderPass(m_commandBuffers[i]);
 
         if (vkEndCommandBuffer(m_commandBuffers[i]) != VK_SUCCESS)

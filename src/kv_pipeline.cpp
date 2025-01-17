@@ -4,6 +4,8 @@
 #include <fstream>
 #include <iostream>
 
+#include "kv_model.h"
+
 using namespace kong;
 using namespace std;
 
@@ -174,12 +176,15 @@ void KongPipeline::createGraphicsPipeline(const string& vertFilePath, const stri
     shaderStages[1].pNext = nullptr;
     shaderStages[1].pSpecializationInfo = nullptr;
 
+    auto bindingDesc = KongModel::Vertex::getBindingDescription();
+    auto attributeDesc = KongModel::Vertex::getAttributeDescription();
+    
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;    // 当前没有顶点输入
-    vertexInputInfo.vertexBindingDescriptionCount = 0;
-    vertexInputInfo.pVertexAttributeDescriptions = nullptr;
-    vertexInputInfo.pVertexBindingDescriptions = nullptr;
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDesc.size()); 
+    vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(bindingDesc.size());
+    vertexInputInfo.pVertexAttributeDescriptions = attributeDesc.data();
+    vertexInputInfo.pVertexBindingDescriptions = bindingDesc.data();
     
     
     VkGraphicsPipelineCreateInfo pipelineInfo = {};

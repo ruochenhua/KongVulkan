@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 
+#include "kv_model.h"
 #include "kv_pipeline.h"
 #include "kv_swap_chain.h"
 #include "kv_window.h"
@@ -22,6 +23,7 @@ namespace kong
         static constexpr int window_height = 600;
         
     private:
+        void loadModels();
         void createPipelineLayout();
         void createPipeline();
         void createCommandBuffers();
@@ -33,5 +35,6 @@ namespace kong
         std::unique_ptr<KongPipeline> m_pipeline;
         VkPipelineLayout m_pipelineLayout;
         std::vector<VkCommandBuffer> m_commandBuffers;
+        std::unique_ptr<KongModel> m_model; 
     };
 }
