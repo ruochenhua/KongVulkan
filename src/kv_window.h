@@ -19,9 +19,17 @@ namespace kong
         bool ShouldClose() const;
         void createWindowSurface(VkInstance instance, VkSurfaceKHR* surface);
         VkExtent2D getExtent() const;
+
+        bool wasWindowResized() const { return frameBufferResized; }
+
+        void resetWindowResizedFlag() { frameBufferResized = false; }
+        
     private:
-        const int width;
-        const int height;
+        static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
+        
+        int width;
+        int height;
+        bool frameBufferResized = false;
         GLFWwindow* m_window;
     };
 }

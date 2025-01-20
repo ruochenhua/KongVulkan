@@ -13,6 +13,20 @@ using namespace kong;
 
 KongSwapChain::KongSwapChain(KongDevice &deviceRef, VkExtent2D extent)
     : device{deviceRef}, windowExtent{extent} {
+  init();
+}
+
+KongSwapChain::KongSwapChain(KongDevice &deviceRef, VkExtent2D extent, std::shared_ptr<KongSwapChain> previous)
+    : device{deviceRef}, windowExtent{extent}, old_swapchain{previous} {
+  init();
+
+  // clean up old swapchain
+  old_swapchain = nullptr;
+}
+
+
+void KongSwapChain::init()
+{
   createSwapChain();
   createImageViews();
   createRenderPass();
@@ -119,6 +133,7 @@ VkResult KongSwapChain::submitCommandBuffers(
   return result;
 }
 
+
 void KongSwapChain::createSwapChain() {
   SwapChainSupportDetails swapChainSupport = device.getSwapChainSupport();
 
@@ -162,7 +177,7 @@ void KongSwapChain::createSwapChain() {
   createInfo.presentMode = presentMode;
   createInfo.clipped = VK_TRUE;
 
-  createInfo.oldSwapchain = VK_NULL_HANDLE;
+  createInfo.oldSwapchain = old_swapchain==nullptr ? VK_NULL_HANDLE : old_swapchain->swapChain;
 
   if (vkCreateSwapchainKHR(device.device(), &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
     throw std::runtime_error("failed to create swap chain!");
@@ -289,6 +304,7 @@ void KongSwapChain::createFramebuffers() {
 
 void KongSwapChain::createDepthResources() {
   VkFormat depthFormat = findDepthFormat();
+  swapChainDepthFormat = depthFormat;
   VkExtent2D swapChainExtent = getSwapChainExtent();
 
   depthImages.resize(imageCount());
@@ -362,7 +378,7 @@ void KongSwapChain::createSyncObjects() {
 VkSurfaceFormatKHR KongSwapChain::chooseSwapSurfaceFormat(
     const std::vector<VkSurfaceFormatKHR> &availableFormats) {
   for (const auto &availableFormat : availableFormats) {
-    if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM &&
+    if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
         availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
       return availableFormat;
     }

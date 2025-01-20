@@ -6,6 +6,7 @@
 #include <vulkan/vulkan.h>
 
 // std lib headers
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -15,11 +16,12 @@ class KongSwapChain {
  public:
   static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
-  KongSwapChain(KongDevice &deviceRef, VkExtent2D windowExtent);
-  ~KongSwapChain();
+    KongSwapChain(KongDevice &deviceRef, VkExtent2D windowExtent);
+    KongSwapChain(KongDevice &deviceRef, VkExtent2D windowExtent, std::shared_ptr<KongSwapChain> previous);
+    ~KongSwapChain();
 
   KongSwapChain(const KongSwapChain &) = delete;
-  void operator=(const KongSwapChain &) = delete;
+  KongSwapChain& operator=(const KongSwapChain &) = delete;
 
   VkFramebuffer getFrameBuffer(int index) { return swapChainFramebuffers[index]; }
   VkRenderPass getRenderPass() { return renderPass; }
@@ -38,7 +40,14 @@ class KongSwapChain {
   VkResult acquireNextImage(uint32_t *imageIndex);
   VkResult submitCommandBuffers(const VkCommandBuffer *buffers, uint32_t *imageIndex);
 
+  bool compareSwapChainFormats(const KongSwapChain &other) const
+  {
+    return swapChainImageFormat == other.swapChainImageFormat &&
+      swapChainDepthFormat == other.swapChainDepthFormat;
+  }
+  
  private:
+    void init();
   void createSwapChain();
   void createImageViews();
   void createDepthResources();
@@ -54,6 +63,8 @@ class KongSwapChain {
   VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
 
   VkFormat swapChainImageFormat;
+  VkFormat swapChainDepthFormat;
+  
   VkExtent2D swapChainExtent;
 
   std::vector<VkFramebuffer> swapChainFramebuffers;
@@ -69,7 +80,8 @@ class KongSwapChain {
   VkExtent2D windowExtent;
 
   VkSwapchainKHR swapChain;
-
+    std::shared_ptr<KongSwapChain> old_swapchain;
+  
   std::vector<VkSemaphore> imageAvailableSemaphores;
   std::vector<VkSemaphore> renderFinishedSemaphores;
   std::vector<VkFence> inFlightFences;

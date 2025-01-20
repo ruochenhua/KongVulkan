@@ -34,33 +34,20 @@ void KongPipeline::bind(VkCommandBuffer commandBuffer)
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 }
 
-void KongPipeline::defaultPipeLineConfigInfo(PipelineConfigInfo& configInfo, uint32_t width, uint32_t height)
+void KongPipeline::defaultPipeLineConfigInfo(PipelineConfigInfo& configInfo)
 {
     configInfo.inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     configInfo.inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;    // 设定为triangle list
     configInfo.inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
     configInfo.inputAssemblyInfo.pNext = nullptr;
     configInfo.inputAssemblyInfo.flags = 0;
-
-    // viewport(设定从gl_position(-1到1)到output image(像素大小))
-    configInfo.viewport.x = 0.0f;
-    configInfo.viewport.y = 0.0f;
-    configInfo.viewport.width = static_cast<float>(width);
-    configInfo.viewport.height = static_cast<float>(height);
-    configInfo.viewport.minDepth = 0.0f;
-    configInfo.viewport.maxDepth = 1.0f;
-
-    // 设定裁切范围，和viewport不同的是viewport长宽改变会挤压三角形，而scissor是裁切掉范围之外的三角形面
-    configInfo.scissor.offset = {0, 0};
-    configInfo.scissor.extent = { width, height };
-
     
     configInfo.viewportInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     // 有设备支持多个viewport和scissor
     configInfo.viewportInfo.viewportCount = 1;
-    configInfo.viewportInfo.pViewports = &configInfo.viewport;
+    configInfo.viewportInfo.pViewports = nullptr;
     configInfo.viewportInfo.scissorCount = 1;
-    configInfo.viewportInfo.pScissors = &configInfo.scissor;
+    configInfo.viewportInfo.pScissors = nullptr;
 
     configInfo.rasterizationInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     configInfo.rasterizationInfo.depthClampEnable = VK_FALSE;   // 启用后fragment的深度会被控制在0到1的范围（小于0的会被设置为0，大于1的会被设置为1），一般不需要这种效果
@@ -124,6 +111,13 @@ void KongPipeline::defaultPipeLineConfigInfo(PipelineConfigInfo& configInfo, uin
     configInfo.depthStencilInfo.stencilTestEnable = VK_FALSE;
     configInfo.depthStencilInfo.front = {};
     configInfo.depthStencilInfo.back = {};
+
+    // 设定viewport和scissor是动态的
+    configInfo.dynamicStateEnables = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    configInfo.dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    configInfo.dynamicStateInfo.pDynamicStates = configInfo.dynamicStateEnables.data();
+    configInfo.dynamicStateInfo.dynamicStateCount = static_cast<uint32_t>(configInfo.dynamicStateEnables.size());
+    configInfo.dynamicStateInfo.flags = 0;
 }
 
 vector<char> KongPipeline::readFile(const string& filePath)
@@ -198,7 +192,7 @@ void KongPipeline::createGraphicsPipeline(const string& vertFilePath, const stri
     pipelineInfo.pMultisampleState = &configInfo.multisampleInfo;
     pipelineInfo.pDepthStencilState = &configInfo.depthStencilInfo;
     pipelineInfo.pColorBlendState = &configInfo.colorBlendInfo;
-    pipelineInfo.pDynamicState = nullptr;
+    pipelineInfo.pDynamicState = &configInfo.dynamicStateInfo;
 
     pipelineInfo.layout = configInfo.pipelineLayout;
     pipelineInfo.renderPass = configInfo.renderPass;

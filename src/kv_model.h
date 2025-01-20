@@ -6,9 +6,6 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 
-#include "assimp/code/AssetLib/3MF/3MFXmlTags.h"
-#include "assimp/code/AssetLib/Blender/BlenderDNA.h"
-
 namespace kong
 {
     class KongModel

@@ -36,7 +36,7 @@ class KongDevice {
 
   // Not copyable or movable
   KongDevice(const KongDevice &) = delete;
-  void operator=(const KongDevice &) = delete;
+  KongDevice& operator=(const KongDevice &) = delete;
   KongDevice(KongDevice &&) = delete;
   KongDevice &operator=(KongDevice &&) = delete;
 
