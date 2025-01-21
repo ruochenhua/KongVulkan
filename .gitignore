@@ -35,5 +35,7 @@
 *.idb
 .idea
 
+
+*.spv
 /build
 /project_build
