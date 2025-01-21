@@ -26,6 +26,7 @@ namespace kong
         VkCommandBuffer getCurrentCommandBuffer() const;
 
         VkRenderPass getSwapChainRenderPass() const {return m_swapChain->getRenderPass();}
+        float getAspectRatio() const {return m_swapChain->extentAspectRatio();}
     private:
         void createCommandBuffers();
         void freeCommandBuffers();

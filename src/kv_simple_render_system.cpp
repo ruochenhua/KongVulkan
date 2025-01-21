@@ -9,8 +9,7 @@ using namespace kong;
 
 struct SimplePushConstantData
 {
-    glm::mat2 transform {1.0f};
-    glm::vec2 offset;
+    glm::mat4 transform {1.0f};
     alignas(16) glm::vec3 color;
 };
 
@@ -64,15 +63,19 @@ void SimpleRenderSystem::createPipeline(VkRenderPass renderPass)
 
 }
 
-void SimpleRenderSystem::renderGameObjects(VkCommandBuffer commandBuffer,  std::vector<KongGameObject>& gameObjects)
+void SimpleRenderSystem::renderGameObjects(VkCommandBuffer commandBuffer,
+    std::vector<KongGameObject>& gameObjects,
+    const KongCamera& camera)
 {
     m_pipeline->bind(commandBuffer);
+
+    auto projectionView = camera.GetProjectionMatrix() * camera.GetViewMatrix();
+    
     for (auto& object : gameObjects)
     {
         SimplePushConstantData push{};
-        push.offset = object.transform2d.translation;
         push.color = object.color;
-        push.transform = object.transform2d.mat2();
+        push.transform = projectionView * object.transform.mat4();
         
         vkCmdPushConstants(commandBuffer, m_pipelineLayout,
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,

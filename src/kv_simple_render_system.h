@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 
+#include "kv_camera.h"
 #include "kv_game_object.h"
 #include "kv_pipeline.h"
 namespace kong
@@ -13,7 +14,9 @@ namespace kong
     
         SimpleRenderSystem(const SimpleRenderSystem&) = delete;
         SimpleRenderSystem& operator=(const SimpleRenderSystem&) = delete;
-        void renderGameObjects(VkCommandBuffer commandBuffer, std::vector<KongGameObject>& gameObjects);
+        void renderGameObjects(VkCommandBuffer commandBuffer,
+            std::vector<KongGameObject>& gameObjects,
+            const KongCamera& camera);
     
     private:
         

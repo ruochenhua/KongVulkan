@@ -23,7 +23,7 @@ namespace kong
         bool wasWindowResized() const { return frameBufferResized; }
 
         void resetWindowResizedFlag() { frameBufferResized = false; }
-        
+        GLFWwindow* getGlfwWindow() const {return m_window;}
     private:
         static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
         
