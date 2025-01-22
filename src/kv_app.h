@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 
+#include "kv_descriptor.h"
 #include "kv_game_object.h"
 #include "kv_pipeline.h"
 #include "kv_renderer.h"
@@ -29,7 +30,8 @@ namespace kong
         KongWindow m_window {window_width, window_height, "kong vulkan"};
         KongDevice m_device{m_window};
         KongRenderer m_renderer{m_window, m_device};
-        
+
+        std::unique_ptr<KongDescriptorPool> m_globalPool{};
         std::vector<KongGameObject> m_gameObjects; 
     };
 }

@@ -8,8 +8,19 @@
 
 using namespace kong;
 
+struct GlobalUbo
+{
+    glm::mat4 projectionView {1.};
+    glm::vec3 lightDirection = glm::normalize(glm::vec3{1., -3., -1.});
+};
+
 KongApp::KongApp()
 {
+    m_globalPool = KongDescriptorPool::Builder(m_device)
+                    .setMaxSets(KongSwapChain::MAX_FRAMES_IN_FLIGHT)
+                    .addPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, KongSwapChain::MAX_FRAMES_IN_FLIGHT)
+                    .build();
+    
     loadGameobjects();
 }
 
@@ -18,7 +29,43 @@ KongApp::~KongApp()
 
 void KongApp::run()
 {
-    SimpleRenderSystem simpleRenderSystem{m_device, m_renderer.getSwapChainRenderPass()};
+    std::vector<std::unique_ptr<KongBuffer>> uboBuffers(KongSwapChain::MAX_FRAMES_IN_FLIGHT);
+    for (int i = 0; i < uboBuffers.size(); i++)
+    {
+        uboBuffers[i] = std::make_unique<KongBuffer>(
+            m_device,
+            sizeof(GlobalUbo),
+            1,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        uboBuffers[i]->map();
+    }
+    // KongBuffer globalUboBuffer{
+    // m_device,
+    // sizeof(GlobalUbo),
+    //     KongSwapChain::MAX_FRAMES_IN_FLIGHT,    //和swapchain同时在渲染的frame数量匹配，这样每个frame都可以使用不同的ubo，不需要进行同步操作
+    //     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    //     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+    //     m_device.properties.limits.minUniformBufferOffsetAlignment,
+    // };
+    //
+    // globalUboBuffer.map();
+
+    auto globalSetLayout = KongDescriptorSetLayout::Builder(m_device)
+                    .addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+                    .build();
+    
+    std::vector<VkDescriptorSet> globalDiscriptorSets{KongSwapChain::MAX_FRAMES_IN_FLIGHT};
+    for (int i = 0; i < globalDiscriptorSets.size(); i++)
+    {
+        auto bufferInfo = uboBuffers[i]->descriptorInfo();
+        KongDescriptorWriter(*globalSetLayout, *m_globalPool)
+        .writeBuffer(0, &bufferInfo)
+        .build(globalDiscriptorSets[i]);
+    }
+    
+    SimpleRenderSystem simpleRenderSystem{m_device, m_renderer.getSwapChainRenderPass(),
+        globalSetLayout->getDescriptorSetLayout()};
     KongCamera camera{};
     camera.SetViewDirection(glm::vec3(0), glm::vec3(0.5, 0.1, 1));
 
@@ -44,6 +91,24 @@ void KongApp::run()
         
         if (auto commandBuffer = m_renderer.beginFrame())
         {
+            int frameIndex = m_renderer.getFrameIndex();
+            FrameInfo frameInfo{
+                frameIndex,
+                frameTime,
+                commandBuffer,
+                camera,
+                globalDiscriptorSets[frameIndex],
+            };
+
+            // 更新ubo数据
+            GlobalUbo ubo{};
+            ubo.projectionView = camera.GetProjectionMatrix() * camera.GetViewMatrix();
+            // globalUboBuffer.writeToBuffer(&ubo, frameIndex);
+            // globalUboBuffer.flushIndex(frameIndex);
+            uboBuffers[frameIndex]->writeToBuffer(&ubo);
+            uboBuffers[frameIndex]->flush();
+            
+            // render
             /* 每个frame之间可以有多个render pass，比如
              * begin offscreen shadow pass
              * render shadow casting object
@@ -52,7 +117,7 @@ void KongApp::run()
              * // post process
              */
             m_renderer.beginSwapChainRenderPass(commandBuffer);
-            simpleRenderSystem.renderGameObjects(commandBuffer, m_gameObjects, camera);
+            simpleRenderSystem.renderGameObjects(frameInfo, m_gameObjects);
             m_renderer.endSwapChainRenderPass(commandBuffer);
             m_renderer.endFrame();
         }

@@ -7,6 +7,8 @@
 #include <memory>
 #include <glm/glm.hpp>
 
+#include "kv_buffer.h"
+
 namespace kong
 {
     class KongModel
@@ -47,14 +49,12 @@ namespace kong
         void createIndexBuffer(const std::vector<uint32_t>& indices);
         
         KongDevice& m_kongDevice;
-        
-        VkBuffer vertexBuffer;
-        VkDeviceMemory vertexBufferMemory;
+
+        std::unique_ptr<KongBuffer> vertexBuffer;
         uint32_t vertexCount;
 
         bool hasIndexBuffer = false;
-        VkBuffer indexBuffer;
-        VkDeviceMemory indexBufferMemory;
+        std::unique_ptr<KongBuffer> indexBuffer;
         uint32_t indexCount;
     };
 }

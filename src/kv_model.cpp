@@ -119,15 +119,15 @@ KongModel::~KongModel()
      * 所以正确的做法是请求大块内存并将内存的部分分配给不同资源。
      * 了解Vulkan memory allocator（VMA）库
      */
-    vkDestroyBuffer(m_kongDevice.device(), vertexBuffer, nullptr);
-    vkFreeMemory(m_kongDevice.device(), vertexBufferMemory, nullptr);
-
-    if (hasIndexBuffer)
-    {
-        vkDestroyBuffer(m_kongDevice.device(), indexBuffer, nullptr);
-        vkFreeMemory(m_kongDevice.device(), indexBufferMemory, nullptr);
-
-    }
+    // vkDestroyBuffer(m_kongDevice.device(), vertexBuffer, nullptr);
+    // vkFreeMemory(m_kongDevice.device(), vertexBufferMemory, nullptr);
+    //
+    // if (hasIndexBuffer)
+    // {
+    //     vkDestroyBuffer(m_kongDevice.device(), indexBuffer, nullptr);
+    //     vkFreeMemory(m_kongDevice.device(), indexBufferMemory, nullptr);
+    //
+    // }
 }
 
 void KongModel::draw(VkCommandBuffer commandBuffer)
@@ -154,13 +154,13 @@ std::unique_ptr<KongModel> KongModel::createModelFromFile(KongDevice& device, co
 void KongModel::bind(VkCommandBuffer commandBuffer)
 {
     // 绑定command buffer和vertex buffer
-    VkBuffer buffers[] = { vertexBuffer };
+    VkBuffer buffers[] = { vertexBuffer->getBuffer() };
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffers, offsets);
 
     if (hasIndexBuffer)
     {
-        vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, indexBuffer->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
     }
 }
 
@@ -170,44 +170,66 @@ void KongModel::createVertexBuffer(const std::vector<Vertex>& vertices)
     assert(vertexCount >= 3 && "Vertex count must be greater than 3");
 
     VkDeviceSize bufferSize = sizeof(vertices[0]) * vertexCount;
+    uint32_t vertexSize = sizeof(vertices[0]);
+
+    KongBuffer staggingBuffer {
+        m_kongDevice,
+        vertexSize,
+        vertexCount,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+    };
+
+    staggingBuffer.map();
+    staggingBuffer.writeToBuffer((void*)vertices.data());
+
+    vertexBuffer = std::make_unique<KongBuffer>(
+    m_kongDevice,
+        vertexSize,
+        vertexCount,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+    );
+
+    m_kongDevice.copyBuffer(staggingBuffer.getBuffer(), vertexBuffer->getBuffer(), bufferSize);
     
-    /*
-     * staging buffer:
-     * 原先使用的是buffer的property包含VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT，代表这段数据是cpu可以修改的
-     * 但这对于GPU并不是最快的，性能最好的buffer需要开启VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT，这一般和HOST_VISIBLE_BIT不兼容
-     * 因此使用staging buffer作为中间buffer，将CPU的数据传输到staging buffer，然后将staging buffer的数据拷贝到Device local的buffer上     
-     */
-    VkBuffer stagingBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory stagingBufferMemory = VK_NULL_HANDLE;
-    /*
-     * 映射host（CPU）和device（GPU）的memory
-     * VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT：表示memory数据能够在host上面可见（host写）
-     * VK_MEMORY_PROPERTY_HOST_COHERENT_BIT：host和device的memory是连贯的
-     */
-    m_kongDevice.createBuffer(bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,   // 告诉vulkan这个buffer的用处只是作为数据传输的来源
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        stagingBuffer, stagingBufferMemory);
+    // /*
+    //  * staging buffer:
+    //  * 原先使用的是buffer的property包含VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT，代表这段数据是cpu可以修改的
+    //  * 但这对于GPU并不是最快的，性能最好的buffer需要开启VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT，这一般和HOST_VISIBLE_BIT不兼容
+    //  * 因此使用staging buffer作为中间buffer，将CPU的数据传输到staging buffer，然后将staging buffer的数据拷贝到Device local的buffer上     
+    //  */
+    // VkBuffer stagingBuffer = VK_NULL_HANDLE;
+    // VkDeviceMemory stagingBufferMemory = VK_NULL_HANDLE;
+    // /*
+    //  * 映射host（CPU）和device（GPU）的memory
+    //  * VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT：表示memory数据能够在host上面可见（host写）
+    //  * VK_MEMORY_PROPERTY_HOST_COHERENT_BIT：host和device的memory是连贯的
+    //  */
+    // m_kongDevice.createBuffer(bufferSize,
+    //     VK_BUFFER_USAGE_TRANSFER_SRC_BIT,   // 告诉vulkan这个buffer的用处只是作为数据传输的来源
+    //     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+    //     stagingBuffer, stagingBufferMemory);
 
-    void* data;
-    // 指向host memory的地址
-    vkMapMemory(m_kongDevice.device(), stagingBufferMemory, 0, bufferSize, 0, &data);
-    // 将顶点数据拷贝到host的分配内存中，由于前面设置了device和host的内存映射（COHERENT_BIT），顶点数据会自动同步到device的内存中
-    // 如果前面没有设置COHERENT_BIT，需要手动调用vkFlushMappedMemoryRanges来同步
-    memcpy(data, vertices.data(), static_cast<size_t>(bufferSize));
-    vkUnmapMemory(m_kongDevice.device(), stagingBufferMemory);
+    // void* data;
+    // // 指向host memory的地址
+    // vkMapMemory(m_kongDevice.device(), stagingBufferMemory, 0, bufferSize, 0, &data);
+    // // 将顶点数据拷贝到host的分配内存中，由于前面设置了device和host的内存映射（COHERENT_BIT），顶点数据会自动同步到device的内存中
+    // // 如果前面没有设置COHERENT_BIT，需要手动调用vkFlushMappedMemoryRanges来同步
+    // memcpy(data, vertices.data(), static_cast<size_t>(bufferSize));
+    // vkUnmapMemory(m_kongDevice.device(), stagingBufferMemory);
+    //
+    // m_kongDevice.createBuffer(bufferSize,
+    //     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,   // 作为vertex buffer，也作为数据传输的目标
+    //     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,    // 使用device local bit以获得更好的性能
+    // vertexBuffer, vertexBufferMemory);
+    //
+    // // 将staging的数据传输到vertex buffer
+    // m_kongDevice.copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
 
-    m_kongDevice.createBuffer(bufferSize,
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,   // 作为vertex buffer，也作为数据传输的目标
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,    // 使用device local bit以获得更好的性能
-    vertexBuffer, vertexBufferMemory);
-
-    // 将staging的数据传输到vertex buffer
-    m_kongDevice.copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
-
-    // 销毁staging buffer
-    vkDestroyBuffer(m_kongDevice.device(), stagingBuffer, nullptr);
-    vkFreeMemory(m_kongDevice.device(), stagingBufferMemory, nullptr);
+    //    // 销毁staging buffer
+    // vkDestroyBuffer(m_kongDevice.device(), stagingBuffer, nullptr);
+    // vkFreeMemory(m_kongDevice.device(), stagingBufferMemory, nullptr);
 }
 
 void KongModel::createIndexBuffer(const std::vector<uint32_t>& indices)
@@ -220,31 +242,52 @@ void KongModel::createIndexBuffer(const std::vector<uint32_t>& indices)
         return;
     }
 
-    // 和vertex buffer一样，index buffer也采用staging buffer
-    VkBuffer stagingBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory stagingBufferMemory = VK_NULL_HANDLE;
+    // // 和vertex buffer一样，index buffer也采用staging buffer
+    // VkBuffer stagingBuffer = VK_NULL_HANDLE;
+    // VkDeviceMemory stagingBufferMemory = VK_NULL_HANDLE;
     
     VkDeviceSize bufferSize = sizeof(indices[0]) * indexCount;
-    m_kongDevice.createBuffer(bufferSize,
+    uint32_t indexSize = sizeof(indices[0]);
+    KongBuffer staggingBuffer{
+        m_kongDevice,
+        indexSize,
+        indexCount,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        stagingBuffer, stagingBufferMemory);
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+    };
 
-    void* data;
-    // 指向host memory的地址
-    vkMapMemory(m_kongDevice.device(), stagingBufferMemory, 0, bufferSize, 0, &data);
-    // 将顶点数据拷贝到host的分配内存中，由于前面设置了device和host的内存映射（COHERENT_BIT），顶点数据会自动同步到device的内存中
-    // 如果前面没有设置COHERENT_BIT，需要手动调用vkFlushMappedMemoryRanges来同步
-    memcpy(data, indices.data(), static_cast<size_t>(bufferSize));
-    vkUnmapMemory(m_kongDevice.device(), stagingBufferMemory);
+    staggingBuffer.map();
+    staggingBuffer.writeToBuffer((void*)indices.data());
     
-    m_kongDevice.createBuffer(bufferSize,
+    
+    // m_kongDevice.createBuffer(bufferSize,
+    //     VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    //     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+    //     stagingBuffer, stagingBufferMemory);
+    //
+    // void* data;
+    // // 指向host memory的地址
+    // vkMapMemory(m_kongDevice.device(), stagingBufferMemory, 0, bufferSize, 0, &data);
+    // // 将顶点数据拷贝到host的分配内存中，由于前面设置了device和host的内存映射（COHERENT_BIT），顶点数据会自动同步到device的内存中
+    // // 如果前面没有设置COHERENT_BIT，需要手动调用vkFlushMappedMemoryRanges来同步
+    // memcpy(data, indices.data(), static_cast<size_t>(bufferSize));
+    // vkUnmapMemory(m_kongDevice.device(), stagingBufferMemory);
+
+    indexBuffer = std::make_unique<KongBuffer>(
+        m_kongDevice,
+        indexSize,
+        indexCount,
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        indexBuffer, indexBufferMemory);
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    m_kongDevice.copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+    //
+    // m_kongDevice.createBuffer(bufferSize,
+    //     VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    //     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    //     indexBuffer, indexBufferMemory);
+
+    m_kongDevice.copyBuffer(staggingBuffer.getBuffer(), indexBuffer->getBuffer(), bufferSize);
     
-    vkDestroyBuffer(m_kongDevice.device(), stagingBuffer, nullptr);
-    vkFreeMemory(m_kongDevice.device(), stagingBufferMemory, nullptr);
+    // vkDestroyBuffer(m_kongDevice.device(), stagingBuffer, nullptr);
+    // vkFreeMemory(m_kongDevice.device(), stagingBufferMemory, nullptr);
 }

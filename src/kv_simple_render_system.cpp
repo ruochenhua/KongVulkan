@@ -9,14 +9,14 @@ using namespace kong;
 
 struct SimplePushConstantData
 {
-    glm::mat4 transform {1.0f};
-    alignas(16) glm::vec3 color;
+    glm::mat4 modelMatrix {1.0f};
+    alignas(16) glm::mat4 normalMatrix {1.0f};
 };
 
-SimpleRenderSystem::SimpleRenderSystem(KongDevice& device, VkRenderPass renderPass)
+SimpleRenderSystem::SimpleRenderSystem(KongDevice& device, VkRenderPass renderPass, VkDescriptorSetLayout globalSetLayout)
     : m_device(device)
 {
-    createPipelineLayout();
+    createPipelineLayout(globalSetLayout);
     createPipeline(renderPass);
 }
 
@@ -25,18 +25,22 @@ SimpleRenderSystem::~SimpleRenderSystem()
     vkDestroyPipelineLayout(m_device.device(), m_pipelineLayout, nullptr);
 }
 
-void SimpleRenderSystem::createPipelineLayout()
+void SimpleRenderSystem::createPipelineLayout(VkDescriptorSetLayout globalSetLayout)
 {
     VkPushConstantRange pushConstantRange{};
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     pushConstantRange.offset = 0;
     pushConstantRange.size = sizeof(SimplePushConstantData);
+
+    // set按顺序存在vector中，set0,set1,set2 ...
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts{globalSetLayout};
     
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     // 用于传输vertex信息之外的信息（如texture， ubo之类的），目前先没有
-    pipelineLayoutInfo.setLayoutCount = 0;
-    pipelineLayoutInfo.pSetLayouts = nullptr;
+    // descriptor set layout
+    pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
+    pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
     // 用于将一些小量的数据送到shader中
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
@@ -63,26 +67,31 @@ void SimpleRenderSystem::createPipeline(VkRenderPass renderPass)
 
 }
 
-void SimpleRenderSystem::renderGameObjects(VkCommandBuffer commandBuffer,
-    std::vector<KongGameObject>& gameObjects,
-    const KongCamera& camera)
+void SimpleRenderSystem::renderGameObjects(const FrameInfo& frameInfo, std::vector<KongGameObject>& gameObjects)
 {
-    m_pipeline->bind(commandBuffer);
-
-    auto projectionView = camera.GetProjectionMatrix() * camera.GetViewMatrix();
+    m_pipeline->bind(frameInfo.commandBuffer);
+    // 绑定descriptor set
+    vkCmdBindDescriptorSets(
+        frameInfo.commandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_pipelineLayout,
+        0, 1, &frameInfo.globalDescriptorSet, 0, nullptr);
+    
+    
+    auto projectionView = frameInfo.camera.GetProjectionMatrix() * frameInfo.camera.GetViewMatrix();
     
     for (auto& object : gameObjects)
     {
         SimplePushConstantData push{};
-        push.color = object.color;
-        push.transform = projectionView * object.transform.mat4();
+        push.modelMatrix = projectionView * object.transform.mat4();
         
-        vkCmdPushConstants(commandBuffer, m_pipelineLayout,
+        
+        vkCmdPushConstants(frameInfo.commandBuffer, m_pipelineLayout,
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             0, sizeof(SimplePushConstantData), &push);
         
-        object.model->bind(commandBuffer);
-        object.model->draw(commandBuffer);
+        object.model->bind(frameInfo.commandBuffer);
+        object.model->draw(frameInfo.commandBuffer);
     }
 }
 
